@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tutoriel Docker Swarm — Getting Started</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#06b6d4;--muted:#94a3b8;--glass: rgba(255,255,255,0.03)}
+    html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;color:#e6eef6;background:linear-gradient(180deg,#071428 0%,#071a2a 60%);}
+    .wrap{max-width:1100px;margin:32px auto;padding:28px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;box-shadow:0 10px 30px rgba(2,6,23,0.6);}
+    header{display:flex;align-items:center;gap:18px}
+    header h1{margin:0;font-size:22px}
+    header p{margin:0;color:var(--muted);font-size:13px}
+    nav{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}
+    .chip{background:var(--glass);padding:8px 12px;border-radius:999px;font-size:13px;color:var(--muted);} 
+    .grid{display:grid;grid-template-columns:280px 1fr;gap:20px}
+    aside{position:sticky;top:28px;height:calc(100vh - 56px);padding:14px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.01));border-radius:8px}
+    aside h3{margin:0 0 12px 0;font-size:14px}
+    aside ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+    aside a{color:#bfefff;text-decoration:none;font-size:14px}
+    main{padding:18px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));border-radius:8px}
+    section{margin-bottom:22px}
+    h2{margin:0 0 8px 0;font-size:18px;color:#eafcff}
+    p{color: #cfe7f5;line-height:1.6}
+    pre{background:#021224;padding:12px;border-radius:8px;color:#d6f6fb;overflow:auto;font-size:13px}
+    code{font-family: SFMono-Regular, Menlo, Monaco, 'Roboto Mono', monospace;background:rgba(255,255,255,0.02);padding:2px 6px;border-radius:6px}
+    .footer{display:flex;justify-content:space-between;align-items:center;margin-top:14px;color:var(--muted);font-size:13px}
+    .cta{display:inline-block;padding:8px 12px;border-radius:8px;background:linear-gradient(90deg,var(--accent),#4ade80);color:#022; font-weight:600;text-decoration:none}
+    @media (max-width:880px){.grid{grid-template-columns:1fr;}.wrap{margin:12px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div style="width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#60a5fa);display:flex;align-items:center;justify-content:center;color:#022;font-weight:700">Sw</div>
+      <div>
+        <h1>Tutoriel Docker Swarm — projet "Getting Started"</h1>
+        <p>Guide pas à pas pour porter ton projet local sur Docker Swarm (claire, pratique, prêt à utiliser).</p>
+      </div>
+    </header>
+
+    <nav>
+      <span class="chip">niveau : débutant → intermédiaire</span>
+      <span class="chip">format : tutoriel</span>
+      <span class="chip">durée estimée : 30–60 min</span>
+    </nav>
+
+    <div class="grid">
+      <aside>
+        <h3>Sommaire</h3>
+        <ul>
+          <li><a href="#why">Pourquoi Swarm</a></li>
+          <li><a href="#prepare">Préparer l'environnement</a></li>
+          <li><a href="#compose">Adapter le compose</a></li>
+          <li><a href="#deploy">Déployer la stack</a></li>
+          <li><a href="#verify">Vérifications</a></li>
+          <li><a href="#scale">Scaling</a></li>
+          <li><a href="#update">Mise à jour sans downtime</a></li>
+          <li><a href="#multi">Plusieurs nœuds</a></li>
+          <li><a href="#cleanup">Nettoyage</a></li>
+          <li><a href="#tips">Bonnes pratiques</a></li>
+        </ul>
+      </aside>
+
+      <main>
+        <section id="why">
+          <h2>1 — Pourquoi Docker Swarm ?</h2>
+          <p>Docker Swarm est l'orchestrateur natif de Docker. Il te permet de gérer plusieurs instances (réplicas) d'un service, de faire du load balancing automatique, et d'orchestrer le déploiement de ta stack sur plusieurs machines si nécessaire.</p>
+        </section>
+
+        <section id="prepare">
+          <h2>2 — Préparer l'environnement</h2>
+          <p>Si tu veux tester en local sur une seule machine : active Swarm sur ton hôte Docker :</p>
+          <pre><code>docker swarm init</code></pre>
+          <p>Le nœud courant devient manager. Pour retrouver le token d'ajout de worker (sur d'autres machines), exécute :</p>
+          <pre><code>docker swarm join-token worker</code></pre>
+        </section>
+
+        <section id="compose">
+          <h2>3 — Adapter ton fichier Compose</h2>
+          <p>Swarm accepte un fichier Compose (version 3+). Ajoute la section <code>deploy</code> pour définir réplicas, constraints et politiques de redémarrage.</p>
+          <pre><code>version: "3.9"
+
+services:
+  getting-started-app:
+    image: node:lts-alpine
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "3000:3000"
+    working_dir: /app
+    volumes:
+      - ./:/app
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_USER: root
+      MYSQL_PASSWORD: secret
+      MYSQL_DB: todos
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: todos
+    volumes:
+      - todo-mysql-data:/var/lib/mysql
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+
+volumes:
+  todo-mysql-data:
+</code></pre>
+          <p>⚠️ <strong>Important :</strong> Les volumes locaux montés en <code>./:/app</code> dans un service Swarm ne fonctionnent pas de la même manière que dans <code>docker compose</code> (multi-host). Préfère construire une image et publier un volume si tu veux persister les données de <code>mysql</code>.</p>
+        </section>
+
+        <section id="deploy">
+          <h2>4 — Déployer la stack</h2>
+          <p>Pour déployer ta stack sur le Swarm :</p>
+          <pre><code>docker stack deploy -c compose.yaml todo-app</code></pre>
+          <p>Vérifie les stacks et services :</p>
+          <pre><code>docker stack ls
+
+docker service ls</code></pre>
+        </section>
+
+        <section id="verify">
+          <h2>5 — Vérifications</h2>
+          <p>Contrôle l'état des services :</p>
+          <pre><code>docker service ps todo-app_getting-started-app
+
+docker ps</code></pre>
+          <p>Si le service <code>mysql</code> ne démarre pas, inspecte les logs :</p>
+          <pre><code>docker service logs todo-app_mysql</code></pre>
+        </section>
+
+        <section id="scale">
+          <h2>6 — Mettre à l'échelle</h2>
+          <p>Scalage en un seul commande :</p>
+          <pre><code>docker service scale todo-app_getting-started-app=5</code></pre>
+          <p>Swarm va créer ou supprimer des réplicas pour atteindre le nombre demandé et répartira le trafic.</p>
+        </section>
+
+        <section id="update">
+          <h2>7 — Mise à jour progressive (rolling update)</h2>
+          <p>Pour mettre à jour l'image sans downtime :</p>
+          <pre><code>docker service update --image myrepo/myapp:latest todo-app_getting-started-app</code></pre>
+          <p>Tu peux configurer les paramètres d'update dans <code>deploy.update_config</code> pour contrôler le parallélisme et le délai entre mises à jour.</p>
+        </section>
+
+        <section id="multi">
+          <h2>8 — Multi-nœuds (optionnel)</h2>
+          <p>Sur le manager :</p>
+          <pre><code>docker swarm init --advertise-addr &lt;IP_MANAGER&gt;</code></pre>
+          <p>Sur chaque worker :</p>
+          <pre><code>docker swarm join --token &lt;TOKEN&gt; &lt;IP_MANAGER&gt;:2377</code></pre>
+          <p>Puis sur le manager : <code>docker node ls</code> pour voir les nœuds.</p>
+        </section>
+
+        <section id="cleanup">
+          <h2>9 — Nettoyage</h2>
+          <p>Pour retirer la stack :</p>
+          <pre><code>docker stack rm todo-app</code></pre>
+          <p>Pour quitter le Swarm :</p>
+          <pre><code>docker swarm leave --force</code></pre>
+        </section>
+
+        <section id="tips">
+          <h2>10 — Bonnes pratiques & pièges</h2>
+          <ul>
+            <li>Construis une image pour ton app au lieu de monter le code en volume en production.</li>
+            <li>Place les étapes stables en haut du Dockerfile pour bénéficier du cache.</li>
+            <li>Attention aux volumes : pour MySQL en production, utilise un stockage persistant accessible par les nœuds (NFS, volumes cloud, ou drivers de volume Docker).</li>
+            <li>Utilise des secrets pour les mots de passe plutôt que des variables d'environnement : <code>docker secret</code>.</li>
+            <li>Surveille les services : <code>docker service logs</code>, <code>docker stats</code>.</li>
+          </ul>
+        </section>
+
+        <div class="footer">
+          <div>Prêt à déployer ?</div>
+          <a class="cta" href="#deploy">Déployer la stack</a>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
